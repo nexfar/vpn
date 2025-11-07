@@ -2,7 +2,7 @@
 #############################################################
 # Script de Instalação Tailscale para Acesso Seguro a DB
 # Controle total do cliente sobre portas permitidas
-# Versão: 3.0 - Com variáveis de ambiente
+# Versão: 3.1 - Com spinner e modo silencioso
 #############################################################
 
 set -e  # Parar se houver erro
@@ -15,6 +15,62 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 PURPLE='\e[38;5;93m'
 ORANGE='\e[38;5;208m'
+
+# Função para spinner animado
+spinner() {
+    local pid=$1
+    local delay=0.1
+    local spinstr='⣾⣽⣻⢿⡿⣟⣯⣷'
+    
+    # Ocultar cursor
+    tput civis
+    
+    while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
+        local temp=${spinstr#?}
+        printf " ${BLUE}[%c]${NC} " "$spinstr"
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b\b\b"
+    done
+    
+    # Limpar spinner e mostrar check
+    printf "\b\b\b\b\b"
+    printf " ${GREEN}✓${NC} "
+    
+    # Mostrar cursor novamente
+    tput cnorm
+}
+
+# Função para executar comando com spinner
+run_with_spinner() {
+    local message=$1
+    shift
+    
+    echo -ne "${GREEN}▶${NC} $message..."
+    
+    # Executar comando em background
+    "$@" > /dev/null 2>&1 &
+    local cmd_pid=$!
+    
+    # Mostrar spinner
+    spinner $cmd_pid
+    
+    # Esperar comando terminar
+    wait $cmd_pid
+    local return_code=$?
+    
+    if [ $return_code -eq 0 ]; then
+        echo -e " ${GREEN}OK${NC}"
+    else
+        echo -e " ${RED}ERRO${NC}"
+        return $return_code
+    fi
+}
+
+# Função para executar comando silenciosamente
+run_silent() {
+    "$@" > /dev/null 2>&1
+}
 
 echo # Add a blank line for top padding
 
@@ -53,8 +109,8 @@ fi
 
 # Se alguma variável não foi definida, usar modo interativo
 if [ "$MODO_INTERATIVO" = true ]; then
-    echo -e "${YELLOW}⚠️  Modo Interativo (variáveis de ambiente não encontradas)${NC}"
-    echo -e "${BLUE}Para execução automatizada, defina as variáveis:${NC}"
+    echo -e "${YELLOW}⚠️  Modo Interativo${NC}"
+    echo -e "${BLUE}Dica: Para execução automatizada, defina as variáveis:${NC}"
     echo -e "${BLUE}  CLIENTE_NOME, AUTH_KEY, DB_PORTA, DB_TIPO${NC}"
     echo ""
     
@@ -119,7 +175,7 @@ if [ "$MODO_INTERATIVO" = true ]; then
         exit 1
     fi
 else
-    echo -e "${GREEN}✓ Modo Automatizado - Usando variáveis de ambiente${NC}"
+    echo -e "${GREEN}✓ Modo Automatizado${NC}"
     echo ""
     echo -e "${YELLOW}📋 Configuração detectada:${NC}"
     echo -e "├─ Cliente: ${GREEN}$CLIENTE_NOME${NC}"
@@ -142,61 +198,79 @@ CLIENTE_TAG=$(echo "$CLIENTE_NOME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
 DB_TAG=$(echo "$DB_TIPO" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
 
 echo ""
-echo -e "${GREEN}▶ Passo 1: Instalando Tailscale...${NC}"
-curl -fsSL https://tailscale.com/install.sh | sh
-
+echo -e "${YELLOW}🚀 Iniciando instalação...${NC}"
 echo ""
-echo -e "${GREEN}▶ Passo 2: Habilitando roteamento IP...${NC}"
-echo 'net.ipv4.ip_forward = 1' | tee -a /etc/sysctl.d/99-tailscale.conf
-echo 'net.ipv6.conf.all.forwarding = 1' | tee -a /etc/sysctl.d/99-tailscale.conf
-sysctl -p /etc/sysctl.d/99-tailscale.conf > /dev/null
 
-echo ""
-echo -e "${GREEN}▶ Passo 3: Configurando Firewall (APENAS porta $DB_PORTA)...${NC}"
+# Passo 1: Instalando Tailscale
+echo -ne "${GREEN}▶${NC} Passo 1: Instalando Tailscale..."
+{
+    curl -fsSL https://tailscale.com/install.sh | sh
+} > /dev/null 2>&1 &
+spinner $!
+echo -e " ${GREEN}OK${NC}"
 
-# Instalar iptables-persistent se não existir (Debian/Ubuntu)
-if command -v apt-get &> /dev/null; then
-    DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent > /dev/null 2>&1
-fi
+# Passo 2: Habilitando roteamento IP
+run_with_spinner "Passo 2: Habilitando roteamento IP" bash -c "
+    echo 'net.ipv4.ip_forward = 1' | tee -a /etc/sysctl.d/99-tailscale.conf && \
+    echo 'net.ipv6.conf.all.forwarding = 1' | tee -a /etc/sysctl.d/99-tailscale.conf && \
+    sysctl -p /etc/sysctl.d/99-tailscale.conf
+"
 
-# Limpar regras antigas do Tailscale se existirem
-iptables -D FORWARD -i tailscale0 -d $DB_IP -p tcp --dport $DB_PORTA -j ACCEPT 2>/dev/null || true
-iptables -D FORWARD -i tailscale0 -d $DB_IP -j DROP 2>/dev/null || true
+# Passo 3: Configurando Firewall
+echo -ne "${GREEN}▶${NC} Passo 3: Configurando Firewall (porta $DB_PORTA)..."
 
-# Adicionar novas regras
-iptables -I FORWARD 1 -i tailscale0 -d $DB_IP -p tcp --dport $DB_PORTA -j ACCEPT -m comment --comment "Tailscale: DB porta $DB_PORTA para $PRESTADOR_NOME"
-iptables -I FORWARD 2 -i tailscale0 -d $DB_IP -j DROP -m comment --comment "Tailscale: Bloquear outras portas - $PRESTADOR_NOME"
+{
+    # Instalar iptables-persistent se não existir (Debian/Ubuntu)
+    if command -v apt-get &> /dev/null; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent
+    fi
 
-# Salvar regras
-if command -v netfilter-persistent &> /dev/null; then
-    netfilter-persistent save
-elif command -v service &> /dev/null; then
-    service iptables save 2>/dev/null || true
-fi
+    # Limpar regras antigas do Tailscale se existirem
+    iptables -D FORWARD -i tailscale0 -d $DB_IP -p tcp --dport $DB_PORTA -j ACCEPT 2>/dev/null || true
+    iptables -D FORWARD -i tailscale0 -d $DB_IP -j DROP 2>/dev/null || true
 
-echo -e "${GREEN}✓ Firewall configurado - APENAS porta $DB_PORTA permitida${NC}"
+    # Adicionar novas regras
+    iptables -I FORWARD 1 -i tailscale0 -d $DB_IP -p tcp --dport $DB_PORTA -j ACCEPT -m comment --comment "Tailscale: DB porta $DB_PORTA para $PRESTADOR_NOME"
+    iptables -I FORWARD 2 -i tailscale0 -d $DB_IP -j DROP -m comment --comment "Tailscale: Bloquear outras portas - $PRESTADOR_NOME"
 
-echo ""
-echo -e "${GREEN}▶ Passo 4: Conectando ao Tailscale...${NC}"
+    # Salvar regras
+    if command -v netfilter-persistent &> /dev/null; then
+        netfilter-persistent save
+    elif command -v service &> /dev/null; then
+        service iptables save 2>/dev/null || true
+    fi
+} > /dev/null 2>&1 &
+spinner $!
+echo -e " ${GREEN}OK${NC}"
+
+# Passo 4: Conectando ao Tailscale
+echo -ne "${GREEN}▶${NC} Passo 4: Conectando ao Tailscale..."
 
 # Hostname descritivo
 HOSTNAME="${CLIENTE_TAG}-${DB_TAG}-gateway"
 
-tailscale up --auth-key="$AUTH_KEY" \
-  --advertise-routes="$DB_IP/32" \
-  --hostname="$HOSTNAME" \
-  --advertise-tags=tag:${CLIENTE_TAG}-db \
-  --accept-risk=lose-ssh
+{
+    tailscale up --auth-key="$AUTH_KEY" \
+      --advertise-routes="$DB_IP/32" \
+      --hostname="$HOSTNAME" \
+      --advertise-tags=tag:${CLIENTE_TAG}-db \
+      --accept-risk=lose-ssh
+    
+    # Aguardar conexão
+    sleep 3
+} > /dev/null 2>&1 &
+spinner $!
+echo -e " ${GREEN}OK${NC}"
 
-# Aguardar conexão
-sleep 3
+# Passo 5: Verificando instalação
+echo -ne "${GREEN}▶${NC} Passo 5: Verificando instalação..."
 
-echo ""
-echo -e "${GREEN}▶ Passo 5: Verificando instalação...${NC}"
+# Pequena pausa para garantir que tudo está pronto
+sleep 2
 
 # Verificar status
 if tailscale status &> /dev/null; then
-    echo -e "${GREEN}✓ Tailscale conectado com sucesso${NC}"
+    echo -e " ${GREEN}OK${NC}"
     
     # Pegar IP Tailscale
     TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "N/A")
@@ -251,7 +325,9 @@ EOF
     echo -e "${GREEN}📄 Configuração salva em: $CONFIG_FILE${NC}"
     
 else
+    echo -e " ${RED}ERRO${NC}"
     echo -e "${RED}❌ Erro ao conectar Tailscale${NC}"
+    echo -e "${YELLOW}Verifique os logs com: journalctl -u tailscaled -n 50${NC}"
     exit 1
 fi
 
