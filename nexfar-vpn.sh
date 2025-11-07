@@ -29,7 +29,7 @@ spinner() {
     while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
         local temp=${spinstr#?}
         # Usar \033[2K para limpar a linha inteira e \r para voltar ao início
-        printf "\033[2K\r${GREEN}▶${NC} %s ${PURPLE}[%s]${NC}" "$message" "${spinstr:0:1}"
+        printf "\033[2K\r${PURPLE}${NC} [%s] %s${NC}" "${spinstr:0:1}" "$message"
         local spinstr=$temp${spinstr%"$temp"}
         sleep $delay
     done
@@ -204,7 +204,7 @@ echo -ne "${GREEN}▶${NC} Passo 1: Instalando Tailscale..."
 {
     curl -fsSL https://tailscale.com/install.sh | sh
 } > /dev/null 2>&1 &
-spinner $!
+spinner $! "Passo 1: Instalando Tailscale..."
 echo -e " ${GREEN} Passo 1: Instalando Tailscale...${NC}"
 
 # Passo 2: Habilitando roteamento IP
