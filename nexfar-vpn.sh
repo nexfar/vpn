@@ -19,6 +19,7 @@ ORANGE='\e[38;5;208m'
 # Função para spinner animado
 spinner() {
     local pid=$1
+    local message=$2
     local delay=0.1
     # Usar caracteres Unicode mais simples e previsíveis
     local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
@@ -28,7 +29,7 @@ spinner() {
     while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
         local temp=${spinstr#?}
         # Usar \033[2K para limpar a linha inteira e \r para voltar ao início
-        printf "\033[2K\r ${BLUE}[%s]${NC} " "${spinstr:0:1}"
+        printf "\033[2K\r ${PURPLE}[%s] $message${NC} " "${spinstr:0:1}"
         local spinstr=$temp${spinstr%"$temp"}
         sleep $delay
     done
@@ -50,7 +51,7 @@ run_with_spinner() {
     local cmd_pid=$!
     
     # Mostrar spinner
-    spinner $cmd_pid
+    spinner $cmd_pid $message
     
     # Esperar comando terminar
     wait $cmd_pid
