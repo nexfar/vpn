@@ -44,7 +44,7 @@ run_with_spinner() {
     local message=$1
     shift
     
-    echo -ne "${GREEN}▶${NC} $message..."
+    echo -ne "${PURPLE}▶${NC} $message..."
     
     # Executar comando em background
     "$@" > /dev/null 2>&1 &
@@ -208,7 +208,7 @@ spinner $! "Passo 1: Instalando Tailscale..."
 echo -e " ${GREEN} Passo 1: Instalando Tailscale...${NC}"
 
 # Passo 2: Habilitando roteamento IP
-run_with_spinner "Passo 2: Habilitando roteamento IP" bash -c "
+run_with_spinner " Passo 2: Habilitando roteamento IP..." bash -c "
     echo 'net.ipv4.ip_forward = 1' | tee -a /etc/sysctl.d/99-tailscale.conf && \
     echo 'net.ipv6.conf.all.forwarding = 1' | tee -a /etc/sysctl.d/99-tailscale.conf && \
     sysctl -p /etc/sysctl.d/99-tailscale.conf
@@ -238,7 +238,7 @@ echo -ne "${GREEN}▶${NC} Passo 3: Configurando Firewall (porta $DB_PORTA)..."
         service iptables save 2>/dev/null || true
     fi
 } > /dev/null 2>&1 &
-spinner $!
+spinner $! "Passo 3: Configurando Firewall (porta $DB_PORTA)..."
 echo -e " ${GREEN} Passo 3: Configurando Firewall (porta $DB_PORTA)...${NC}"
 
 # Passo 4: Conectando ao Tailscale
