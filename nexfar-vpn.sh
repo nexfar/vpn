@@ -2,7 +2,7 @@
 #############################################################
 # Script de Instalação Tailscale para Acesso Seguro a DB
 # Controle total do cliente sobre portas permitidas
-# Versão: 2.0 - Genérico
+# Versão: 2.1 - Corrigido para pipe
 #############################################################
 
 set -e  # Parar se houver erro
@@ -15,6 +15,40 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 PURPLE='\e[38;5;93m'
 ORANGE='\e[38;5;208m'
+
+# Função para ler input mesmo quando executado via pipe
+read_input() {
+    local prompt="$1"
+    local var_name="$2"
+    local input
+    
+    # Se temos um terminal disponível, usar ele
+    if [ -t 0 ] || [ -p /dev/stdin ]; then
+        read -p "$prompt" input
+    else
+        # Estamos em pipe, ler direto do terminal
+        echo -n "$prompt"
+        read input < /dev/tty
+    fi
+    
+    eval "$var_name='$input'"
+}
+
+# Função para confirmar (s/n)
+confirm() {
+    local prompt="$1"
+    local reply
+    
+    echo -n "$prompt"
+    if [ -t 0 ] || [ -p /dev/stdin ]; then
+        read -n 1 -r reply
+    else
+        read -n 1 -r reply < /dev/tty
+    fi
+    echo ""
+    
+    [[ $reply =~ ^[Ss]$ ]]
+}
 
 echo # Add a blank line for top padding
 
@@ -50,7 +84,7 @@ echo -e "${YELLOW}📋 Configuração do Acesso ao Banco de Dados:${NC}"
 echo ""
 
 # Nome do cliente
-read -p "Nome do Distruidor/Indústria: " CLIENTE_NOME
+read_input "Nome do Distruidor/Indústria: " CLIENTE_NOME
 if [ -z "$CLIENTE_NOME" ]; then
     echo -e "${RED}❌ Nome é obrigatório${NC}"
     exit 1
@@ -65,7 +99,7 @@ fi
 
 # Auth Key
 echo ""
-read -p "Cole a Auth Key fornecida por $PRESTADOR_NOME: " AUTH_KEY
+read_input "Cole a Auth Key fornecida por $PRESTADOR_NOME: " AUTH_KEY
 if [ -z "$AUTH_KEY" ]; then
     echo -e "${RED}❌ Auth Key é obrigatória${NC}"
     exit 1
@@ -90,7 +124,7 @@ echo -e "├─ MongoDB: 27017"
 echo -e "├─ Redis: 6379"
 echo -e "└─ Cassandra: 9042"
 echo ""
-read -p "Digite a porta do banco de dados: " DB_PORTA
+read_input "Digite a porta do banco de dados: " DB_PORTA
 if [ -z "$DB_PORTA" ]; then
     echo -e "${RED}❌ Porta do banco de dados é obrigatória${NC}"
     exit 1
@@ -98,7 +132,7 @@ fi
 
 # Tipo de banco (opcional, para hostname)
 echo ""
-read -p "Tipo de banco de dados (postgres/mysql/oracle/mongo/outro): " DB_TIPO
+read_input "Tipo de banco de dados (postgres/mysql/oracle/mongo/outro): " DB_TIPO
 DB_TIPO=${DB_TIPO:-db}  # Default para 'db' se vazio
 
 # Converter nomes para lowercase e sem espaços para hostname
@@ -115,10 +149,8 @@ echo -e "Porta do DB: ${GREEN}$DB_PORTA${NC}"
 echo -e "Tipo de DB: ${GREEN}$DB_TIPO${NC}"
 echo -e "Acesso permitido: ${GREEN}APENAS porta $DB_PORTA${NC}"
 echo ""
-read -p "Confirmar e continuar? (s/n): " -n 1 -r
-echo ""
 
-if [[ ! $REPLY =~ ^[Ss]$ ]]; then
+if ! confirm "Confirmar e continuar? (s/n): "; then
     echo -e "${RED}❌ Instalação cancelada${NC}"
     exit 1
 fi
@@ -270,23 +302,32 @@ EOF
 
 chmod +x /usr/local/bin/test-db-access.sh
 
-# Criar script de desinstalação
-cat > /usr/local/bin/remove-tailscale-db.sh << EOF
+# Criar script de desinstalação (corrigido para funcionar com pipe também)
+cat > /usr/local/bin/remove-tailscale-db.sh << 'EOFSCRIPT'
 #!/bin/bash
 echo "Removendo configuração Tailscale para $CLIENTE_NOME..."
 tailscale down
 iptables -D FORWARD -i tailscale0 -d $DB_IP -p tcp --dport $DB_PORTA -j ACCEPT 2>/dev/null
 iptables -D FORWARD -i tailscale0 -d $DB_IP -j DROP 2>/dev/null
 echo "Deseja remover o Tailscale completamente? (s/n)"
-read -n 1 -r
-if [[ \$REPLY =~ ^[Ss]$ ]]; then
+if [ -t 0 ]; then
+    read -n 1 -r
+else
+    read -n 1 -r < /dev/tty
+fi
+if [[ $REPLY =~ ^[Ss]$ ]]; then
     apt-get remove --purge tailscale -y 2>/dev/null || yum remove tailscale -y 2>/dev/null
     rm -f /etc/tailscale/client-config.json
     echo "✓ Tailscale removido completamente"
 else
     echo "✓ Apenas configurações removidas, Tailscale ainda instalado"
 fi
-EOF
+EOFSCRIPT
+
+# Substituir variáveis no script de desinstalação
+sed -i "s/\$CLIENTE_NOME/$CLIENTE_NOME/g" /usr/local/bin/remove-tailscale-db.sh
+sed -i "s/\$DB_IP/$DB_IP/g" /usr/local/bin/remove-tailscale-db.sh
+sed -i "s/\$DB_PORTA/$DB_PORTA/g" /usr/local/bin/remove-tailscale-db.sh
 
 chmod +x /usr/local/bin/remove-tailscale-db.sh
 
