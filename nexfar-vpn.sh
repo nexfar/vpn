@@ -257,7 +257,7 @@ HOSTNAME="${CLIENTE_TAG}-${DB_TAG}-gateway"
     # Aguardar conexão
     sleep 3
 } > /dev/null 2>&1 &
-spinner $!
+spinner $! "Passo 4: Conectando ao Tailscale..."
 echo -e " ${GREEN} Passo 4: Conectando ao Tailscale...${NC}"
 
 # Passo 5: Verificando instalação
