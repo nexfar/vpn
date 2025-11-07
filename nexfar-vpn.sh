@@ -204,7 +204,7 @@ echo -ne "${GREEN}▶${NC} Passo 1: Instalando Tailscale..."
     curl -fsSL https://tailscale.com/install.sh | sh
 } > /dev/null 2>&1 &
 spinner $!
-echo -e " ${GREEN}OK${NC}"
+echo -e " ${GREEN} Passo 1: Instalando Tailscale...${NC}"
 
 # Passo 2: Habilitando roteamento IP
 run_with_spinner "Passo 2: Habilitando roteamento IP" bash -c "
@@ -238,7 +238,7 @@ echo -ne "${GREEN}▶${NC} Passo 3: Configurando Firewall (porta $DB_PORTA)..."
     fi
 } > /dev/null 2>&1 &
 spinner $!
-echo -e " ${GREEN}OK${NC}"
+echo -e " ${GREEN} Passo 3: Configurando Firewall (porta $DB_PORTA)...${NC}"
 
 # Passo 4: Conectando ao Tailscale
 echo -ne "${GREEN}▶${NC} Passo 4: Conectando ao Tailscale..."
@@ -257,7 +257,7 @@ HOSTNAME="${CLIENTE_TAG}-${DB_TAG}-gateway"
     sleep 3
 } > /dev/null 2>&1 &
 spinner $!
-echo -e " ${GREEN}OK${NC}"
+echo -e " ${GREEN} Passo 4: Conectando ao Tailscale...${NC}"
 
 # Passo 5: Verificando instalação
 echo -ne "${GREEN}▶${NC} Passo 5: Verificando instalação..."
