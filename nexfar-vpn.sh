@@ -2,7 +2,7 @@
 #############################################################
 # Script de Instalação Tailscale para Acesso Seguro a DB
 # Controle total do cliente sobre portas permitidas
-# Versão: 2.1 - Corrigido para pipe
+# Versão: 3.0 - Com variáveis de ambiente
 #############################################################
 
 set -e  # Parar se houver erro
@@ -15,40 +15,6 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 PURPLE='\e[38;5;93m'
 ORANGE='\e[38;5;208m'
-
-# Função para ler input mesmo quando executado via pipe
-read_input() {
-    local prompt="$1"
-    local var_name="$2"
-    local input
-    
-    # Se temos um terminal disponível, usar ele
-    if [ -t 0 ] || [ -p /dev/stdin ]; then
-        read -p "$prompt" input
-    else
-        # Estamos em pipe, ler direto do terminal
-        echo -n "$prompt"
-        read input < /dev/tty
-    fi
-    
-    eval "$var_name='$input'"
-}
-
-# Função para confirmar (s/n)
-confirm() {
-    local prompt="$1"
-    local reply
-    
-    echo -n "$prompt"
-    if [ -t 0 ] || [ -p /dev/stdin ]; then
-        read -n 1 -r reply
-    else
-        read -n 1 -r reply < /dev/tty
-    fi
-    echo ""
-    
-    [[ $reply =~ ^[Ss]$ ]]
-}
 
 echo # Add a blank line for top padding
 
@@ -79,81 +45,101 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-# Solicitar informações necessárias
-echo -e "${YELLOW}📋 Configuração do Acesso ao Banco de Dados:${NC}"
-echo ""
-
-# Nome do cliente
-read_input "Nome do Distruidor/Indústria: " CLIENTE_NOME
-if [ -z "$CLIENTE_NOME" ]; then
-    echo -e "${RED}❌ Nome é obrigatório${NC}"
-    exit 1
+# Verificar se todas as variáveis de ambiente necessárias estão definidas
+MODO_INTERATIVO=false
+if [ -z "$CLIENTE_NOME" ] || [ -z "$AUTH_KEY" ] || [ -z "$DB_PORTA" ] || [ -z "$DB_TIPO" ]; then
+    MODO_INTERATIVO=true
 fi
 
-# Nome do prestador
+# Se alguma variável não foi definida, usar modo interativo
+if [ "$MODO_INTERATIVO" = true ]; then
+    echo -e "${YELLOW}⚠️  Modo Interativo (variáveis de ambiente não encontradas)${NC}"
+    echo -e "${BLUE}Para execução automatizada, defina as variáveis:${NC}"
+    echo -e "${BLUE}  CLIENTE_NOME, AUTH_KEY, DB_PORTA, DB_TIPO${NC}"
+    echo ""
+    
+    # Nome do cliente
+    if [ -z "$CLIENTE_NOME" ]; then
+        read -p "Nome do Distribuidor/Indústria: " CLIENTE_NOME < /dev/tty
+        if [ -z "$CLIENTE_NOME" ]; then
+            echo -e "${RED}❌ Nome é obrigatório${NC}"
+            exit 1
+        fi
+    fi
+    
+    # Auth Key
+    if [ -z "$AUTH_KEY" ]; then
+        echo ""
+        read -p "Cole a Auth Key fornecida por Nexfar: " AUTH_KEY < /dev/tty
+        if [ -z "$AUTH_KEY" ]; then
+            echo -e "${RED}❌ Auth Key é obrigatória${NC}"
+            exit 1
+        fi
+    fi
+    
+    # Porta do banco de dados
+    if [ -z "$DB_PORTA" ]; then
+        echo ""
+        echo -e "${BLUE}Portas comuns de bancos de dados:${NC}"
+        echo -e "├─ PostgreSQL: 5432"
+        echo -e "├─ MySQL/MariaDB: 3306"
+        echo -e "├─ Oracle: 1521"
+        echo -e "├─ SQL Server: 1433"
+        echo -e "├─ MongoDB: 27017"
+        echo -e "├─ Redis: 6379"
+        echo -e "└─ Cassandra: 9042"
+        echo ""
+        read -p "Digite a porta do banco de dados: " DB_PORTA < /dev/tty
+        if [ -z "$DB_PORTA" ]; then
+            echo -e "${RED}❌ Porta do banco de dados é obrigatória${NC}"
+            exit 1
+        fi
+    fi
+    
+    # Tipo de banco
+    if [ -z "$DB_TIPO" ]; then
+        echo ""
+        read -p "Tipo de banco de dados (postgres/mysql/oracle/mongo/outro): " DB_TIPO < /dev/tty
+        DB_TIPO=${DB_TIPO:-db}  # Default para 'db' se vazio
+    fi
+    
+    # Confirmar no modo interativo
+    echo ""
+    echo -e "${YELLOW}⚠️  Confirme as informações:${NC}"
+    echo -e "Cliente: ${GREEN}$CLIENTE_NOME${NC}"
+    echo -e "IP do Servidor DB: ${GREEN}$(hostname -I | awk '{print $1}')${NC}"
+    echo -e "Porta do DB: ${GREEN}$DB_PORTA${NC}"
+    echo -e "Tipo de DB: ${GREEN}$DB_TIPO${NC}"
+    echo -e "Acesso permitido: ${GREEN}APENAS porta $DB_PORTA${NC}"
+    echo ""
+    read -p "Confirmar e continuar? (s/n): " -n 1 -r < /dev/tty
+    echo ""
+    if [[ ! $REPLY =~ ^[Ss]$ ]]; then
+        echo -e "${RED}❌ Instalação cancelada${NC}"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✓ Modo Automatizado - Usando variáveis de ambiente${NC}"
+    echo ""
+    echo -e "${YELLOW}📋 Configuração detectada:${NC}"
+    echo -e "├─ Cliente: ${GREEN}$CLIENTE_NOME${NC}"
+    echo -e "├─ Porta: ${GREEN}$DB_PORTA${NC}"
+    echo -e "├─ Tipo DB: ${GREEN}$DB_TIPO${NC}"
+    echo -e "└─ Auth Key: ${GREEN}${AUTH_KEY:0:15}...${NC}"
+fi
+
+# Configurações fixas ou derivadas
 PRESTADOR_NOME="Nexfar"
-if [ -z "$PRESTADOR_NOME" ]; then
-    echo -e "${RED}❌ Nome do prestador é obrigatório${NC}"
-    exit 1
-fi
-
-# Auth Key
-echo ""
-read_input "Cole a Auth Key fornecida por $PRESTADOR_NOME: " AUTH_KEY
-if [ -z "$AUTH_KEY" ]; then
-    echo -e "${RED}❌ Auth Key é obrigatória${NC}"
-    exit 1
-fi
-
-# IP do servidor de banco de dados
-echo ""
 DB_IP=$(hostname -I | awk '{print $1}')
+
 if [ -z "$DB_IP" ]; then
-    echo -e "${RED}❌ IP do banco de dados é obrigatório${NC}"
+    echo -e "${RED}❌ IP do banco de dados não pôde ser detectado${NC}"
     exit 1
 fi
-
-# Porta do banco de dados
-echo ""
-echo -e "${BLUE}Portas comuns de bancos de dados:${NC}"
-echo -e "├─ PostgreSQL: 5432"
-echo -e "├─ MySQL/MariaDB: 3306"
-echo -e "├─ Oracle: 1521"
-echo -e "├─ SQL Server: 1433"
-echo -e "├─ MongoDB: 27017"
-echo -e "├─ Redis: 6379"
-echo -e "└─ Cassandra: 9042"
-echo ""
-read_input "Digite a porta do banco de dados: " DB_PORTA
-if [ -z "$DB_PORTA" ]; then
-    echo -e "${RED}❌ Porta do banco de dados é obrigatória${NC}"
-    exit 1
-fi
-
-# Tipo de banco (opcional, para hostname)
-echo ""
-read_input "Tipo de banco de dados (postgres/mysql/oracle/mongo/outro): " DB_TIPO
-DB_TIPO=${DB_TIPO:-db}  # Default para 'db' se vazio
 
 # Converter nomes para lowercase e sem espaços para hostname
 CLIENTE_TAG=$(echo "$CLIENTE_NOME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
 DB_TAG=$(echo "$DB_TIPO" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-
-# Confirmar dados
-echo ""
-echo -e "${YELLOW}⚠️  Confirme as informações:${NC}"
-echo -e "Cliente: ${GREEN}$CLIENTE_NOME${NC}"
-echo -e "Prestador: ${GREEN}$PRESTADOR_NOME${NC}"
-echo -e "IP do Servidor DB: ${GREEN}$DB_IP${NC}"
-echo -e "Porta do DB: ${GREEN}$DB_PORTA${NC}"
-echo -e "Tipo de DB: ${GREEN}$DB_TIPO${NC}"
-echo -e "Acesso permitido: ${GREEN}APENAS porta $DB_PORTA${NC}"
-echo ""
-
-if ! confirm "Confirmar e continuar? (s/n): "; then
-    echo -e "${RED}❌ Instalação cancelada${NC}"
-    exit 1
-fi
 
 echo ""
 echo -e "${GREEN}▶ Passo 1: Instalando Tailscale...${NC}"
@@ -264,72 +250,10 @@ EOF
     echo ""
     echo -e "${GREEN}📄 Configuração salva em: $CONFIG_FILE${NC}"
     
-    # Log detalhado
-    LOG_FILE="/var/log/tailscale-db-setup.log"
-    {
-        echo "=== Tailscale DB Access Setup - $(date) ==="
-        echo "Cliente: $CLIENTE_NOME"
-        echo "Prestador: $PRESTADOR_NOME"
-        echo "DB IP: $DB_IP"
-        echo "DB Porta: $DB_PORTA"
-        echo "DB Tipo: $DB_TIPO"
-        echo "Tailscale IP: $TAILSCALE_IP"
-        echo "Hostname: $HOSTNAME"
-        echo "Firewall Rules:"
-        iptables -L FORWARD -n -v | grep tailscale0
-    } > "$LOG_FILE"
-    
-    echo -e "${GREEN}📄 Log detalhado em: $LOG_FILE${NC}"
-    
 else
     echo -e "${RED}❌ Erro ao conectar Tailscale${NC}"
     exit 1
 fi
-
-echo ""
-echo -e "${GREEN}▶ Criando scripts auxiliares...${NC}"
-
-# Criar script de teste de conectividade
-cat > /usr/local/bin/test-db-access.sh << EOF
-#!/bin/bash
-echo "Testando acesso ao banco de dados..."
-echo "IP: $DB_IP"
-echo "Porta: $DB_PORTA"
-timeout 2 bash -c "cat < /dev/null > /dev/tcp/$DB_IP/$DB_PORTA" && \\
-  echo "✅ Porta $DB_PORTA está acessível" || \\
-  echo "❌ Porta $DB_PORTA não está respondendo"
-EOF
-
-chmod +x /usr/local/bin/test-db-access.sh
-
-# Criar script de desinstalação (corrigido para funcionar com pipe também)
-cat > /usr/local/bin/remove-tailscale-db.sh << 'EOFSCRIPT'
-#!/bin/bash
-echo "Removendo configuração Tailscale para $CLIENTE_NOME..."
-tailscale down
-iptables -D FORWARD -i tailscale0 -d $DB_IP -p tcp --dport $DB_PORTA -j ACCEPT 2>/dev/null
-iptables -D FORWARD -i tailscale0 -d $DB_IP -j DROP 2>/dev/null
-echo "Deseja remover o Tailscale completamente? (s/n)"
-if [ -t 0 ]; then
-    read -n 1 -r
-else
-    read -n 1 -r < /dev/tty
-fi
-if [[ $REPLY =~ ^[Ss]$ ]]; then
-    apt-get remove --purge tailscale -y 2>/dev/null || yum remove tailscale -y 2>/dev/null
-    rm -f /etc/tailscale/client-config.json
-    echo "✓ Tailscale removido completamente"
-else
-    echo "✓ Apenas configurações removidas, Tailscale ainda instalado"
-fi
-EOFSCRIPT
-
-# Substituir variáveis no script de desinstalação
-sed -i "s/\$CLIENTE_NOME/$CLIENTE_NOME/g" /usr/local/bin/remove-tailscale-db.sh
-sed -i "s/\$DB_IP/$DB_IP/g" /usr/local/bin/remove-tailscale-db.sh
-sed -i "s/\$DB_PORTA/$DB_PORTA/g" /usr/local/bin/remove-tailscale-db.sh
-
-chmod +x /usr/local/bin/remove-tailscale-db.sh
 
 echo ""
 echo -e "${GREEN}================================================${NC}"
@@ -339,11 +263,9 @@ echo -e "${GREEN}================================================${NC}"
 echo ""
 echo -e "${YELLOW}💡 Comandos úteis:${NC}"
 echo -e "├─ Ver status: ${GREEN}tailscale status${NC}"
-echo -e "├─ Testar conexão DB: ${GREEN}test-db-access.sh${NC}"
 echo -e "├─ Ver logs: ${GREEN}journalctl -u tailscaled -f${NC}"
 echo -e "├─ Ver firewall: ${GREEN}iptables -L FORWARD -n -v | grep tailscale${NC}"
-echo -e "├─ Ver config: ${GREEN}cat /etc/tailscale/client-config.json${NC}"
-echo -e "└─ Desinstalar: ${GREEN}remove-tailscale-db.sh${NC}"
+echo -e "└─ Ver config: ${GREEN}cat /etc/tailscale/client-config.json${NC}"
 
 echo ""
 echo -e "${YELLOW}📌 IMPORTANTE:${NC}"
