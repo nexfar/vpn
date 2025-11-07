@@ -20,24 +20,21 @@ ORANGE='\e[38;5;208m'
 spinner() {
     local pid=$1
     local delay=0.1
-    local spinstr='⣾⣽⣻⢿⡿⣟⣯⣷'
+    # Usar caracteres Unicode mais simples e previsíveis
+    local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
     
-    # Ocultar cursor
     tput civis
     
     while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
         local temp=${spinstr#?}
-        printf " ${BLUE}[%c]${NC} " "$spinstr"
+        # Usar \033[2K para limpar a linha inteira e \r para voltar ao início
+        printf "\033[2K\r ${BLUE}[%s]${NC} " "${spinstr:0:1}"
         local spinstr=$temp${spinstr%"$temp"}
         sleep $delay
-        printf "\b\b\b\b\b"
     done
     
-    # Limpar spinner e mostrar check
-    printf "\b\b\b\b\b"
-    printf " ${GREEN}✓${NC} "
+    printf "\033[2K\r ${GREEN}✓${NC}  "
     
-    # Mostrar cursor novamente
     tput cnorm
 }
 
