@@ -29,7 +29,7 @@ spinner() {
     while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
         local temp=${spinstr#?}
         # Usar \033[2K para limpar a linha inteira e \r para voltar ao início
-        printf "\033[2K\r ${PURPLE}[%s] $message${NC} " "${spinstr:0:1}"
+        printf "\033[2K\r${GREEN}▶${NC} %s ${PURPLE}[%s]${NC}" "$message" "${spinstr:0:1}"
         local spinstr=$temp${spinstr%"$temp"}
         sleep $delay
     done
@@ -51,14 +51,14 @@ run_with_spinner() {
     local cmd_pid=$!
     
     # Mostrar spinner
-    spinner $cmd_pid $message
+    spinner $cmd_pid "$message"
     
     # Esperar comando terminar
     wait $cmd_pid
     local return_code=$?
     
     if [ $return_code -eq 0 ]; then
-        echo -e " ${GREEN}OK${NC}"
+        echo -e " ${GREEN}${message}${NC}"
     else
         echo -e " ${RED}ERRO${NC}"
         return $return_code
