@@ -1,8 +1,8 @@
 #!/bin/bash
 #############################################################
 # Script de Instalação Tailscale para Acesso Seguro a DB
-# Controle total do cliente sobre portas permitidas
-# Versão: 3.2 - Correção iptables
+# Versão Simplificada - Sem configuração de firewall
+# Versão: 4.0
 #############################################################
 
 set -e  # Parar se houver erro
@@ -63,119 +63,6 @@ run_with_spinner() {
     fi
 }
 
-# Função para detectar e configurar iptables corretamente
-configure_iptables() {
-    local DB_IP=$1
-    local DB_PORTA=$2
-    local PRESTADOR_NOME=$3
-    
-    echo -e "${YELLOW}🔧 Configurando firewall iptables...${NC}"
-    
-    # Verificar se iptables está disponível
-    if ! command -v iptables &> /dev/null; then
-        echo -e "${RED}❌ iptables não encontrado. Instalando...${NC}"
-        if command -v apt-get &> /dev/null; then
-            apt-get update && apt-get install -y iptables
-        elif command -v yum &> /dev/null; then
-            yum install -y iptables
-        elif command -v dnf &> /dev/null; then
-            dnf install -y iptables
-        else
-            echo -e "${RED}❌ Não foi possível instalar iptables automaticamente${NC}"
-            return 1
-        fi
-    fi
-    
-    # Verificar versão do iptables
-    IPTABLES_VERSION=$(iptables --version 2>/dev/null | grep -oP 'v\K[0-9.]+' | head -1)
-    echo -e "${BLUE}ℹ️  Versão do iptables: ${IPTABLES_VERSION}${NC}"
-    
-    # Limpar regras antigas do Tailscale se existirem (silenciosamente)
-    echo -e "${YELLOW}   Limpando regras antigas...${NC}"
-    iptables -D FORWARD -i tailscale0 -d $DB_IP -p tcp --dport $DB_PORTA -j ACCEPT 2>/dev/null || true
-    iptables -D FORWARD -i tailscale0 -d $DB_IP -j DROP 2>/dev/null || true
-    
-    # Tentar adicionar regras com diferentes sintaxes
-    echo -e "${YELLOW}   Adicionando nova regra de permissão...${NC}"
-    
-    # Método 1: Sintaxe completa com comment (se suportado)
-    if iptables -I FORWARD 1 -i tailscale0 -d "$DB_IP" -p tcp --dport "$DB_PORTA" -j ACCEPT -m comment --comment "Tailscale: DB porta $DB_PORTA para $PRESTADOR_NOME" 2>/dev/null; then
-        echo -e "${GREEN}   ✓ Regra de permissão adicionada (com comentário)${NC}"
-    else
-        # Método 2: Sintaxe sem comment
-        if iptables -I FORWARD 1 -i tailscale0 -d "$DB_IP" -p tcp --dport "$DB_PORTA" -j ACCEPT 2>/dev/null; then
-            echo -e "${GREEN}   ✓ Regra de permissão adicionada (sem comentário)${NC}"
-        else
-            # Método 3: Sintaxe mais básica
-            if iptables -A FORWARD -i tailscale0 -d "$DB_IP" -p tcp --dport "$DB_PORTA" -j ACCEPT 2>/dev/null; then
-                echo -e "${GREEN}   ✓ Regra de permissão adicionada (append)${NC}"
-            else
-                echo -e "${YELLOW}   ⚠️  Não foi possível adicionar regra específica de porta${NC}"
-                # Tentar regra mais genérica
-                iptables -A FORWARD -i tailscale0 -j ACCEPT 2>/dev/null || true
-                echo -e "${YELLOW}   ℹ️  Adicionada regra genérica para interface tailscale0${NC}"
-            fi
-        fi
-    fi
-    
-    echo -e "${YELLOW}   Adicionando regra de bloqueio...${NC}"
-    
-    # Adicionar regra de DROP
-    # Método 1: Com comment
-    if iptables -I FORWARD 2 -i tailscale0 -d "$DB_IP" -j DROP -m comment --comment "Tailscale: Bloquear outras portas - $PRESTADOR_NOME" 2>/dev/null; then
-        echo -e "${GREEN}   ✓ Regra de bloqueio adicionada (com comentário)${NC}"
-    else
-        # Método 2: Sem comment
-        if iptables -I FORWARD 2 -i tailscale0 -d "$DB_IP" -j DROP 2>/dev/null; then
-            echo -e "${GREEN}   ✓ Regra de bloqueio adicionada (sem comentário)${NC}"
-        else
-            echo -e "${YELLOW}   ⚠️  Não foi possível adicionar regra de bloqueio específica${NC}"
-            echo -e "${YELLOW}   ℹ️  A segurança ainda está garantida pela regra de permissão${NC}"
-        fi
-    fi
-    
-    # Salvar regras
-    echo -e "${YELLOW}   Salvando configuração do firewall...${NC}"
-    
-    if command -v netfilter-persistent &> /dev/null; then
-        netfilter-persistent save 2>/dev/null || true
-        echo -e "${GREEN}   ✓ Configuração salva com netfilter-persistent${NC}"
-    elif command -v iptables-save &> /dev/null; then
-        # Tentar salvar para diferentes locais conforme a distribuição
-        if [ -f /etc/sysconfig/iptables ]; then
-            iptables-save > /etc/sysconfig/iptables 2>/dev/null || true
-            echo -e "${GREEN}   ✓ Configuração salva em /etc/sysconfig/iptables${NC}"
-        elif [ -f /etc/iptables/rules.v4 ]; then
-            iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
-            echo -e "${GREEN}   ✓ Configuração salva em /etc/iptables/rules.v4${NC}"
-        elif [ -d /etc/iptables ]; then
-            mkdir -p /etc/iptables 2>/dev/null || true
-            iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
-            echo -e "${GREEN}   ✓ Configuração salva em /etc/iptables/rules.v4${NC}"
-        else
-            echo -e "${YELLOW}   ⚠️  Não foi possível salvar regras permanentemente${NC}"
-            echo -e "${YELLOW}   ℹ️  As regras estão ativas mas serão perdidas após reboot${NC}"
-        fi
-    elif command -v service &> /dev/null; then
-        service iptables save 2>/dev/null || service iptables-persistent save 2>/dev/null || true
-        echo -e "${GREEN}   ✓ Tentativa de salvar via service${NC}"
-    else
-        echo -e "${YELLOW}   ⚠️  Método de salvamento não encontrado${NC}"
-        echo -e "${YELLOW}   ℹ️  Execute 'iptables-save > /etc/iptables.rules' manualmente se necessário${NC}"
-    fi
-    
-    # Verificar regras adicionadas
-    echo -e "${YELLOW}   Verificando regras aplicadas...${NC}"
-    local RULES_COUNT=$(iptables -L FORWARD -n 2>/dev/null | grep -c "tailscale0" || echo "0")
-    if [ "$RULES_COUNT" -gt 0 ]; then
-        echo -e "${GREEN}   ✓ $RULES_COUNT regras ativas para tailscale0${NC}"
-        return 0
-    else
-        echo -e "${YELLOW}   ⚠️  Nenhuma regra específica encontrada, mas continuando...${NC}"
-        return 0
-    fi
-}
-
 echo # Add a blank line for top padding
 
 printf "                                                            ${PURPLE}*****${NC}\n"
@@ -195,7 +82,7 @@ printf "${PURPLE}*****       ******       *********     *****      *****${NC}  $
 echo # Add a blank line for bottom padding
 
 echo -e "${GREEN}================================================${NC}"
-echo -e "${GREEN}   Liberação de IP e Porta para rede Nexfar     ${NC}"
+echo -e "${GREEN}   Configuração Tailscale VPN - Nexfar          ${NC}"
 echo -e "${GREEN}================================================${NC}"
 echo ""
 
@@ -277,7 +164,6 @@ if [ "$MODO_INTERATIVO" = true ]; then
     echo -e "IP do Servidor DB: ${GREEN}$(hostname -I | awk '{print $1}')${NC}"
     echo -e "Porta do DB: ${GREEN}$DB_PORTA${NC}"
     echo -e "Tipo de DB: ${GREEN}$DB_TIPO${NC}"
-    echo -e "Acesso permitido: ${GREEN}APENAS porta $DB_PORTA${NC}"
     echo ""
     read -p "Confirmar e continuar? (s/n): " -n 1 -r < /dev/tty
     echo ""
@@ -327,13 +213,8 @@ run_with_spinner " Passo 2: Habilitando roteamento IP..." bash -c "
     sysctl -p /etc/sysctl.d/99-tailscale.conf
 "
 
-# Passo 3: Configurando Firewall (função melhorada)
-echo ""
-configure_iptables "$DB_IP" "$DB_PORTA" "$PRESTADOR_NOME"
-echo ""
-
-# Passo 4: Conectando ao Tailscale
-echo -ne "${GREEN}▶${NC} Passo 4: Conectando ao Tailscale..."
+# Passo 3: Conectando ao Tailscale
+echo -ne "${GREEN}▶${NC} Passo 3: Conectando ao Tailscale..."
 
 # Hostname descritivo
 HOSTNAME="${CLIENTE_TAG}-${DB_TAG}-gateway"
@@ -348,11 +229,11 @@ HOSTNAME="${CLIENTE_TAG}-${DB_TAG}-gateway"
     # Aguardar conexão
     sleep 3
 } > /dev/null 2>&1 &
-spinner $! "Passo 4: Conectando ao Tailscale..."
-echo -e " ${GREEN} Passo 4: Conectando ao Tailscale...${NC}"
+spinner $! "Passo 3: Conectando ao Tailscale..."
+echo -e " ${GREEN} Passo 3: Conectando ao Tailscale...${NC}"
 
-# Passo 5: Verificando instalação
-echo -ne "${GREEN}▶${NC} Passo 5: Verificando instalação..."
+# Passo 4: Verificando instalação
+echo -ne "${GREEN}▶${NC} Passo 4: Verificando instalação..."
 
 # Pequena pausa para garantir que tudo está pronto
 sleep 2
@@ -364,9 +245,6 @@ if tailscale status &> /dev/null; then
     # Pegar IP Tailscale
     TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "N/A")
     
-    # Verificar regras de firewall
-    REGRAS=$(iptables -L FORWARD -n -v 2>/dev/null | grep -c "tailscale0" || echo "0")
-    
     echo ""
     echo -e "${GREEN}================================================${NC}"
     echo -e "${GREEN}🎉 INSTALAÇÃO CONCLUÍDA COM SUCESSO!${NC}"
@@ -377,15 +255,14 @@ if tailscale status &> /dev/null; then
     echo -e "├─ IP Tailscale Gateway: ${GREEN}$TAILSCALE_IP${NC}"
     echo -e "├─ Hostname: ${GREEN}$HOSTNAME${NC}"
     echo -e "├─ Rota anunciada: ${GREEN}$DB_IP/32${NC}"
-    echo -e "├─ Porta permitida: ${GREEN}APENAS $DB_PORTA${NC}"
-    echo -e "└─ Firewall: ${GREEN}$REGRAS regras ativas${NC}"
+    echo -e "├─ Porta do DB: ${GREEN}$DB_PORTA${NC}"
+    echo -e "└─ Tipo do DB: ${GREEN}$DB_TIPO${NC}"
     echo ""
-    echo -e "${YELLOW}🔒 Segurança Garantida:${NC}"
-    echo -e "✅ Acesso limitado ao IP $DB_IP"
-    echo -e "✅ APENAS porta $DB_PORTA acessível"
-    echo -e "✅ Outras portas bloqueadas por firewall local"
-    echo -e "✅ Controle total mantido por $CLIENTE_NOME"
+    echo -e "${YELLOW}🔒 Recursos de Segurança:${NC}"
+    echo -e "✅ Conexão VPN estabelecida"
     echo -e "✅ Tráfego criptografado end-to-end"
+    echo -e "✅ Autenticação via Auth Key"
+    echo -e "✅ Controle de acesso via ACLs no Tailscale"
     echo ""
     echo -e "${YELLOW}📧 Envie para $PRESTADOR_NOME:${NC}"
     echo -e "├─ IP do Banco: ${GREEN}$DB_IP${NC}"
@@ -429,16 +306,11 @@ echo ""
 echo -e "${YELLOW}💡 Comandos úteis:${NC}"
 echo -e "├─ Ver status: ${GREEN}tailscale status${NC}"
 echo -e "├─ Ver logs: ${GREEN}journalctl -u tailscaled -f${NC}"
-echo -e "├─ Ver firewall: ${GREEN}iptables -L FORWARD -n -v | grep tailscale${NC}"
+echo -e "├─ Ver IP: ${GREEN}tailscale ip${NC}"
 echo -e "└─ Ver config: ${GREEN}cat /etc/tailscale/client-config.json${NC}"
 
 echo ""
-echo -e "${YELLOW}📌 IMPORTANTE:${NC}"
-echo -e "O acesso está limitado APENAS à porta $DB_PORTA do servidor $DB_IP"
-echo -e "Mesmo que $PRESTADOR_NOME mude as configurações do lado deles,"
-echo -e "o firewall local garante que apenas a porta $DB_PORTA seja acessível."
-
-echo ""
-echo -e "${YELLOW}🔧 Debug do Firewall:${NC}"
-echo -e "Regras atuais do FORWARD chain:"
-iptables -L FORWARD -n -v --line-numbers | head -10 || true
+echo -e "${YELLOW}📌 NOTA IMPORTANTE:${NC}"
+echo -e "A segurança e controle de acesso devem ser configurados"
+echo -e "através das ACLs (Access Control Lists) no painel do Tailscale."
+echo -e "Consulte a documentação da Nexfar para configurações recomendadas."
