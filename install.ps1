@@ -69,7 +69,7 @@ function Show-Spinner {
         Write-Host $Message -ForegroundColor Green
         return $result
     } else {
-        Write-Host " ❌ " -ForegroundColor Red -NoNewline
+        Write-Host " [X] " -ForegroundColor Red -NoNewline
         Write-Host $Message -ForegroundColor Red
         throw "Erro ao executar: $Message"
     }
@@ -167,7 +167,7 @@ Write-Host ""
 # Verificar se está rodando como Administrador
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "❌ Este script precisa ser executado como Administrador" -ForegroundColor Red
+    Write-Host "[X] Este script precisa ser executado como Administrador" -ForegroundColor Red
     exit 1
 }
 
@@ -180,7 +180,7 @@ if (-not $env:CLIENTE_NOME -or -not $env:AUTH_KEY -or -not $env:DB_PORTA -or -no
 
 # Modo interativo
 if ($MODO_INTERATIVO) {
-    Write-Host "⚠️  Modo Interativo" -ForegroundColor Yellow
+    Write-Host "[!] Modo Interativo" -ForegroundColor Yellow
     Write-Host "Dica: Para execução automatizada, defina as variáveis:" -ForegroundColor Cyan
     Write-Host "  `$env:CLIENTE_NOME, `$env:AUTH_KEY, `$env:DB_PORTA, `$env:DB_TIPO" -ForegroundColor Cyan
     Write-Host ""
@@ -189,7 +189,7 @@ if ($MODO_INTERATIVO) {
     if (-not $env:CLIENTE_NOME) {
         $CLIENTE_NOME = Read-Host "Nome do Distribuidor/Indústria"
         if ([string]::IsNullOrWhiteSpace($CLIENTE_NOME)) {
-            Write-Host "❌ Nome é obrigatório" -ForegroundColor Red
+            Write-Host "[X] Nome é obrigatório" -ForegroundColor Red
             exit 1
         }
     } else {
@@ -201,7 +201,7 @@ if ($MODO_INTERATIVO) {
         Write-Host ""
         $AUTH_KEY = Read-Host "Cole a Auth Key fornecida por Nexfar"
         if ([string]::IsNullOrWhiteSpace($AUTH_KEY)) {
-            Write-Host "❌ Auth Key é obrigatória" -ForegroundColor Red
+            Write-Host "[X] Auth Key é obrigatória" -ForegroundColor Red
             exit 1
         }
     } else {
@@ -222,7 +222,7 @@ if ($MODO_INTERATIVO) {
         Write-Host ""
         $DB_PORTA = Read-Host "Digite a porta do banco de dados"
         if ([string]::IsNullOrWhiteSpace($DB_PORTA)) {
-            Write-Host "❌ Porta do banco de dados é obrigatória" -ForegroundColor Red
+            Write-Host "[X] Porta do banco de dados é obrigatória" -ForegroundColor Red
             exit 1
         }
     } else {
@@ -242,7 +242,7 @@ if ($MODO_INTERATIVO) {
     
     # Confirmar no modo interativo
     Write-Host ""
-    Write-Host "⚠️  Confirme as informações:" -ForegroundColor Yellow
+    Write-Host "[!] Confirme as informações:" -ForegroundColor Yellow
     
     # Obter IP do servidor
     $DB_IP = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.InterfaceAlias -notlike "*Loopback*" -and $_.IPAddress -ne "127.0.0.1"} | Select-Object -First 1).IPAddress
@@ -259,7 +259,7 @@ if ($MODO_INTERATIVO) {
     
     $confirm = Read-Host "Confirmar e continuar? (s/n)"
     if ($confirm -ne 's' -and $confirm -ne 'S') {
-        Write-Host "❌ Instalação cancelada" -ForegroundColor Red
+        Write-Host "[X] Instalação cancelada" -ForegroundColor Red
         exit 1
     }
 } else {
@@ -286,7 +286,7 @@ $PRESTADOR_NOME = "Nexfar"
 $DB_IP = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.InterfaceAlias -notlike "*Loopback*" -and $_.IPAddress -ne "127.0.0.1"} | Select-Object -First 1).IPAddress
 
 if (-not $DB_IP) {
-    Write-Host "❌ IP do banco de dados não pôde ser detectado" -ForegroundColor Red
+    Write-Host "[X] IP do banco de dados não pôde ser detectado" -ForegroundColor Red
     exit 1
 }
 
@@ -295,7 +295,7 @@ $CLIENTE_TAG = ($CLIENTE_NOME -replace ' ', '-').ToLower()
 $DB_TAG = $DB_TIPO.ToLower()
 
 Write-Host ""
-Write-Host "🚀 Iniciando instalação..." -ForegroundColor Yellow
+Write-Host "[*] Iniciando instalação..." -ForegroundColor Yellow
 Write-Host ""
 
 # Passo 1: Baixar e instalar Tailscale
@@ -398,10 +398,10 @@ if (Test-Path $tailscale) {
         
         Write-Host ""
         Write-Host "================================================" -ForegroundColor Green
-        Write-Host "🎉 INSTALAÇÃO CONCLUÍDA COM SUCESSO!" -ForegroundColor Green
+        Write-Host "[OK] INSTALAÇÃO CONCLUÍDA COM SUCESSO!" -ForegroundColor Green
         Write-Host "================================================" -ForegroundColor Green
         Write-Host ""
-        Write-Host "📊 Resumo da Configuração:" -ForegroundColor Yellow
+        Write-Host "[>] Resumo da Configuração:" -ForegroundColor Yellow
         Write-Host "├─ Cliente: " -NoNewline
         Write-Host $CLIENTE_NOME -ForegroundColor Green
         Write-Host "├─ IP Tailscale Gateway: " -NoNewline
@@ -415,13 +415,13 @@ if (Test-Path $tailscale) {
         Write-Host "└─ Tipo do DB: " -NoNewline
         Write-Host $DB_TIPO -ForegroundColor Green
         Write-Host ""
-        Write-Host "🔒 Recursos de Segurança:" -ForegroundColor Yellow
-        Write-Host "✅ Conexão VPN estabelecida"
-        Write-Host "✅ Tráfego criptografado end-to-end"
-        Write-Host "✅ Autenticação via Auth Key"
-        Write-Host "✅ Controle de acesso via ACLs no Tailscale"
+        Write-Host "[>] Recursos de Segurança:" -ForegroundColor Yellow
+        Write-Host "[OK] Conexão VPN estabelecida"
+        Write-Host "[OK] Tráfego criptografado end-to-end"
+        Write-Host "[OK] Autenticação via Auth Key"
+        Write-Host "[OK] Controle de acesso via ACLs no Tailscale"
         Write-Host ""
-        Write-Host "📧 Envie para $PRESTADOR_NOME" -ForegroundColor Yellow -NoNewline
+        Write-Host "[>] Envie para $PRESTADOR_NOME" -ForegroundColor Yellow -NoNewline
         Write-Host ":"
         Write-Host "├─ IP do Banco: " -NoNewline
         Write-Host $DB_IP -ForegroundColor Green
@@ -454,28 +454,28 @@ if (Test-Path $tailscale) {
         $config | ConvertTo-Json | Set-Content -Path $configFile -Encoding UTF8
         
         Write-Host ""
-        Write-Host "📄 Configuração salva em: " -NoNewline
+        Write-Host "[>] Configuração salva em: " -NoNewline
         Write-Host $configFile -ForegroundColor Green
         
     } catch {
-        Write-Host " ❌ ERRO" -ForegroundColor Red
-        Write-Host "❌ Erro ao conectar Tailscale" -ForegroundColor Red
+        Write-Host " [X] ERRO" -ForegroundColor Red
+        Write-Host "[X] Erro ao conectar Tailscale" -ForegroundColor Red
         Write-Host "Verifique os logs no Event Viewer" -ForegroundColor Yellow
         exit 1
     }
 } else {
-    Write-Host " ❌ ERRO" -ForegroundColor Red
-    Write-Host "❌ Tailscale não foi instalado corretamente" -ForegroundColor Red
+    Write-Host " [X] ERRO" -ForegroundColor Red
+    Write-Host "[X] Tailscale não foi instalado corretamente" -ForegroundColor Red
     exit 1
 }
 
 Write-Host ""
 Write-Host "================================================" -ForegroundColor Green
-Write-Host "✅ Processo finalizado com sucesso!" -ForegroundColor Green
+Write-Host "[OK] Processo finalizado com sucesso!" -ForegroundColor Green
 Write-Host "================================================" -ForegroundColor Green
 
 Write-Host ""
-Write-Host "💡 Comandos úteis:" -ForegroundColor Yellow
+Write-Host "[>] Comandos úteis:" -ForegroundColor Yellow
 Write-Host "├─ Ver status: " -NoNewline
 Write-Host "`"$tailscale`" status" -ForegroundColor Green
 Write-Host "├─ Ver IP: " -NoNewline
