@@ -134,28 +134,28 @@ Write-ColorHost "*****       ******   *****        ****    **********" "Magenta"
 Write-Host "     " -NoNewline
 Write-ColorHost "*****     ******        ******  ******" "Magenta"
 Write-Host "    " -NoNewline
-Write-ColorHost "\ \   / /  _ \| \ | |" "Magenta"
+Write-ColorHost '\ \   / /  _ \| \ | |' "Magenta"
 Write-Host ""
 
 Write-ColorHost "*****       ******    *****     ******   ****** *****" "Magenta"
 Write-Host "    " -NoNewline
 Write-ColorHost "*****      *******    ********  ******" "Magenta"
 Write-Host "    " -NoNewline
-Write-ColorHost " \ \ / /| |_) |  \| |" "Magenta"
+Write-ColorHost ' \ \ / /| |_) |  \| |' "Magenta"
 Write-Host ""
 
 Write-ColorHost "*****       ******     *************    ******   ******" "Magenta"
 Write-Host "  " -NoNewline
 Write-ColorHost "*****       ******************  ******" "Magenta"
 Write-Host "    " -NoNewline
-Write-ColorHost "  \ V / |  __/| |\  |" "Magenta"
+Write-ColorHost '  \ V / |  __/| |\  |' "Magenta"
 Write-Host ""
 
 Write-ColorHost "*****       ******       *********     *****      *****" "Magenta"
 Write-Host "  " -NoNewline
 Write-ColorHost "*****          ******** ******  ******" "Magenta"
 Write-Host "    " -NoNewline
-Write-ColorHost "   \_/  |_|   |_| \_|" "Magenta"
+Write-ColorHost '   \_/  |_|   |_| \_|' "Magenta"
 Write-Host ""
 
 Write-Host ""
