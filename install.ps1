@@ -38,40 +38,49 @@ function Write-ColorHost {
 function Show-Spinner {
     param(
         [scriptblock]$ScriptBlock,
-        [string]$Message
+        [string]$Message,
+        [object[]]$ArgumentList = @()
     )
-    
-    $job = Start-Job -ScriptBlock $ScriptBlock
+
+    $job = Start-Job -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList
     $spinChars = '|','/','-','\'
     $i = 0
-    
+
     [Console]::CursorVisible = $false
-    
+
     while ($job.State -eq 'Running') {
         Write-Host "`r" -NoNewline
         Write-Host " [$($spinChars[$i])] $Message" -ForegroundColor Magenta -NoNewline
         $i = ($i + 1) % $spinChars.Length
         Start-Sleep -Milliseconds 100
     }
-    
+
     # Limpar linha e mostrar resultado
     Write-Host "`r" -NoNewline
     Write-Host (" " * 80) -NoNewline
     Write-Host "`r" -NoNewline
-    
+
     [Console]::CursorVisible = $true
-    
-    $result = Receive-Job -Job $job
+
+    # Capturar resultado e erros
+    $jobResult = Receive-Job -Job $job -ErrorVariable jobErrors 2>&1
+    $jobState = $job.State
     Remove-Job -Job $job
-    
-    if ($job.State -eq 'Completed') {
+
+    if ($jobState -eq 'Completed' -and -not $jobErrors) {
         Write-Host " [OK]" -ForegroundColor Green -NoNewline
         Write-Host $Message -ForegroundColor Green
-        return $result
+        return $jobResult
     } else {
         Write-Host " [X] " -ForegroundColor Red -NoNewline
         Write-Host $Message -ForegroundColor Red
-        throw "Erro ao executar: $Message"
+        if ($jobErrors) {
+            Write-Host "[DEBUG] Erro: $jobErrors" -ForegroundColor Yellow
+        }
+        if ($jobResult -and $jobResult -is [System.Management.Automation.ErrorRecord]) {
+            Write-Host "[DEBUG] Detalhe: $($jobResult.Exception.Message)" -ForegroundColor Yellow
+        }
+        return $false
     }
 }
 
@@ -301,29 +310,50 @@ Write-Host ""
 # Passo 1: Baixar e instalar Tailscale
 Write-Host ">" -ForegroundColor Green -NoNewline
 $result = Show-Spinner -ScriptBlock {
+    $installerPath = "$env:TEMP\tailscale-setup.exe"
+    $tailscalePath = "$env:ProgramFiles\Tailscale\tailscale.exe"
+
+    # Verificar se Tailscale já está instalado
+    if (Test-Path $tailscalePath) {
+        return "ja-instalado"
+    }
+
+    # Baixar instalador
     try {
-        # Baixar instalador do Tailscale
-        $tailscaleUrl = "https://tailscale.com/download/windows"
-        $installerPath = "$env:TEMP\tailscale-setup.exe"
-        
-        # Verificar se Tailscale já está instalado
-        $tailscalePath = "$env:ProgramFiles\Tailscale\tailscale.exe"
-        if (-not (Test-Path $tailscalePath)) {
-            # Baixar instalador
-            Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.exe" -OutFile $installerPath -UseBasicParsing
-            
-            # Instalar silenciosamente
-            Start-Process -FilePath $installerPath -ArgumentList "/quiet" -Wait -NoNewWindow
-            
-            # Aguardar instalação
-            Start-Sleep -Seconds 5
-        }
-        
-        return $true
+        Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.exe" -OutFile $installerPath -UseBasicParsing
     } catch {
-        return $false
+        throw "Erro ao baixar: $($_.Exception.Message)"
+    }
+
+    if (-not (Test-Path $installerPath)) {
+        throw "Instalador nao foi baixado para: $installerPath"
+    }
+
+    # Instalar silenciosamente
+    try {
+        $process = Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait -PassThru -NoNewWindow
+        if ($process.ExitCode -ne 0) {
+            throw "Instalador retornou codigo: $($process.ExitCode)"
+        }
+    } catch {
+        throw "Erro na instalacao: $($_.Exception.Message)"
+    }
+
+    # Aguardar instalação
+    Start-Sleep -Seconds 5
+
+    # Verificar se instalou
+    if (Test-Path $tailscalePath) {
+        return "instalado"
+    } else {
+        throw "Tailscale nao encontrado apos instalacao em: $tailscalePath"
     }
 } -Message "Passo 1: Instalando Tailscale"
+
+# Mostrar resultado do passo 1
+if ($result -eq "ja-instalado") {
+    Write-Host "  (Tailscale ja estava instalado)" -ForegroundColor Cyan
+}
 
 # Passo 2: Configurar roteamento IP (IP Forwarding no Windows)
 Write-Host ">" -ForegroundColor Green -NoNewline
@@ -386,6 +416,29 @@ Start-Sleep -Seconds 2
 
 # Verificar status
 $tailscale = "$env:ProgramFiles\Tailscale\tailscale.exe"
+
+# Debug: mostrar caminho sendo verificado
+Write-Host ""
+Write-Host "[DEBUG] Verificando: $tailscale" -ForegroundColor Cyan
+Write-Host "[DEBUG] Existe: $(Test-Path $tailscale)" -ForegroundColor Cyan
+
+# Tentar caminhos alternativos
+if (-not (Test-Path $tailscale)) {
+    $altPaths = @(
+        "${env:ProgramFiles(x86)}\Tailscale\tailscale.exe",
+        "$env:LOCALAPPDATA\Tailscale\tailscale.exe",
+        "$env:LOCALAPPDATA\Programs\Tailscale\tailscale.exe"
+    )
+    foreach ($path in $altPaths) {
+        Write-Host "[DEBUG] Tentando: $path" -ForegroundColor Cyan
+        if (Test-Path $path) {
+            $tailscale = $path
+            Write-Host "[DEBUG] Encontrado em: $path" -ForegroundColor Green
+            break
+        }
+    }
+}
+
 if (Test-Path $tailscale) {
     try {
         # Obter IP do Tailscale
@@ -466,6 +519,20 @@ if (Test-Path $tailscale) {
 } else {
     Write-Host " [X] ERRO" -ForegroundColor Red
     Write-Host "[X] Tailscale não foi instalado corretamente" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "[DEBUG] Listando conteudo de Program Files:" -ForegroundColor Cyan
+    if (Test-Path "$env:ProgramFiles\Tailscale") {
+        Get-ChildItem "$env:ProgramFiles\Tailscale" | ForEach-Object { Write-Host "  - $($_.Name)" -ForegroundColor Cyan }
+    } else {
+        Write-Host "  Pasta Tailscale nao existe em Program Files" -ForegroundColor Yellow
+    }
+    Write-Host ""
+    Write-Host "[DEBUG] Verificando se instalador foi baixado:" -ForegroundColor Cyan
+    $installerPath = "$env:TEMP\tailscale-setup.exe"
+    Write-Host "  Instalador em: $installerPath" -ForegroundColor Cyan
+    Write-Host "  Existe: $(Test-Path $installerPath)" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Tente instalar manualmente: https://tailscale.com/download/windows" -ForegroundColor Yellow
     exit 1
 }
 
