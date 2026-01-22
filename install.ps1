@@ -375,39 +375,43 @@ $result = Show-Spinner -ScriptBlock {
 # Passo 3: Conectar ao Tailscale
 Write-Host ">" -ForegroundColor Green -NoNewline
 $HOSTNAME = "${CLIENTE_TAG}-${DB_TAG}-gateway"
+Write-Host " Passo 3: Conectando ao Tailscale..." -ForegroundColor Magenta
 
-$result = Show-Spinner -ScriptBlock {
-    param($AUTH_KEY, $DB_IP, $HOSTNAME, $CLIENTE_TAG)
-    
+# Executar diretamente (nao em background job) para melhor controle
+$tailscale = "$env:ProgramFiles\Tailscale\tailscale.exe"
+
+if (Test-Path $tailscale) {
     try {
-        # Caminho do Tailscale
-        $tailscale = "$env:ProgramFiles\Tailscale\tailscale.exe"
-        
-        if (Test-Path $tailscale) {
-            # Conectar ao Tailscale
-            $args = @(
-                "up",
-                "--auth-key=$AUTH_KEY",
-                "--advertise-routes=$DB_IP/32",
-                "--hostname=$HOSTNAME",
-                "--advertise-tags=tag:${CLIENTE_TAG}-db",
-                "--accept-routes",
-                "--accept-dns=false"
-            )
-            
-            Start-Process -FilePath $tailscale -ArgumentList $args -Wait -NoNewWindow
-            
-            # Aguardar conexão
-            Start-Sleep -Seconds 3
-            
-            return $true
-        } else {
-            return $false
-        }
+        Write-Host "  [DEBUG] Executando tailscale up..." -ForegroundColor Cyan
+
+        # Conectar ao Tailscale com --unattended para modo nao-interativo
+        $tsArgs = "up --auth-key=$AUTH_KEY --advertise-routes=$DB_IP/32 --hostname=$HOSTNAME --advertise-tags=tag:${CLIENTE_TAG}-db --accept-routes --accept-dns=false --unattended --reset"
+
+        Write-Host "  [DEBUG] Comando: tailscale $tsArgs" -ForegroundColor Cyan
+
+        # Usar cmd /c para evitar problemas com argumentos
+        $output = & $tailscale up `
+            --auth-key=$AUTH_KEY `
+            --advertise-routes="$DB_IP/32" `
+            --hostname=$HOSTNAME `
+            --advertise-tags="tag:${CLIENTE_TAG}-db" `
+            --accept-routes `
+            --accept-dns=false `
+            --unattended `
+            --reset 2>&1
+
+        Write-Host "  [DEBUG] Saida: $output" -ForegroundColor Cyan
+        Write-Host " [OK] Passo 3: Conectando ao Tailscale" -ForegroundColor Green
+
+        # Aguardar conexao
+        Start-Sleep -Seconds 3
     } catch {
-        return $false
+        Write-Host " [X] Passo 3: Erro ao conectar" -ForegroundColor Red
+        Write-Host "  [DEBUG] Erro: $($_.Exception.Message)" -ForegroundColor Yellow
     }
-} -Message "Passo 3: Conectando ao Tailscale" -ArgumentList $AUTH_KEY, $DB_IP, $HOSTNAME, $CLIENTE_TAG
+} else {
+    Write-Host " [X] Passo 3: tailscale.exe nao encontrado" -ForegroundColor Red
+}
 
 # Passo 4: Verificar instalação
 Write-Host ">" -ForegroundColor Green -NoNewline
