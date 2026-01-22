@@ -318,9 +318,11 @@ $result = Show-Spinner -ScriptBlock {
         return "ja-instalado"
     }
 
-    # Baixar instalador EXE
+    # Baixar instalador EXE (seguir redirects)
     try {
-        Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile $installerPath -UseBasicParsing
+        # Usar WebClient que segue redirects automaticamente
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile("https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe", $installerPath)
     } catch {
         throw "Erro ao baixar: $($_.Exception.Message)"
     }
