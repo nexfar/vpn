@@ -42,7 +42,7 @@ function Show-Spinner {
     )
     
     $job = Start-Job -ScriptBlock $ScriptBlock
-    $spinChars = '⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'
+    $spinChars = '|','/','-','\'
     $i = 0
     
     [Console]::CursorVisible = $false
@@ -65,7 +65,7 @@ function Show-Spinner {
     Remove-Job -Job $job
     
     if ($job.State -eq 'Completed') {
-        Write-Host " ✓ " -ForegroundColor Green -NoNewline
+        Write-Host " [OK]" -ForegroundColor Green -NoNewline
         Write-Host $Message -ForegroundColor Green
         return $result
     } else {
@@ -212,13 +212,13 @@ if ($MODO_INTERATIVO) {
     if (-not $env:DB_PORTA) {
         Write-Host ""
         Write-Host "Portas comuns de bancos de dados:" -ForegroundColor Cyan
-        Write-Host "├─ PostgreSQL: 5432"
-        Write-Host "├─ MySQL/MariaDB: 3306"
-        Write-Host "├─ Oracle: 1521"
-        Write-Host "├─ SQL Server: 1433"
-        Write-Host "├─ MongoDB: 27017"
-        Write-Host "├─ Redis: 6379"
-        Write-Host "└─ Cassandra: 9042"
+        Write-Host "|- PostgreSQL: 5432"
+        Write-Host "|- MySQL/MariaDB: 3306"
+        Write-Host "|- Oracle: 1521"
+        Write-Host "|- SQL Server: 1433"
+        Write-Host "|- MongoDB: 27017"
+        Write-Host "|- Redis: 6379"
+        Write-Host "\- Cassandra: 9042"
         Write-Host ""
         $DB_PORTA = Read-Host "Digite a porta do banco de dados"
         if ([string]::IsNullOrWhiteSpace($DB_PORTA)) {
@@ -268,16 +268,16 @@ if ($MODO_INTERATIVO) {
     $DB_PORTA = $env:DB_PORTA
     $DB_TIPO = $env:DB_TIPO
     
-    Write-Host "✓ Modo Automatizado" -ForegroundColor Green
+    Write-Host "[OK] Modo Automatizado" -ForegroundColor Green
     Write-Host ""
-    Write-Host "📋 Configuração detectada:" -ForegroundColor Yellow
-    Write-Host "├─ Cliente: " -NoNewline
+    Write-Host "[>] Configuração detectada:" -ForegroundColor Yellow
+    Write-Host "|- Cliente: " -NoNewline
     Write-Host $CLIENTE_NOME -ForegroundColor Green
-    Write-Host "├─ Porta: " -NoNewline
+    Write-Host "|- Porta: " -NoNewline
     Write-Host $DB_PORTA -ForegroundColor Green
-    Write-Host "├─ Tipo DB: " -NoNewline
+    Write-Host "|- Tipo DB: " -NoNewline
     Write-Host $DB_TIPO -ForegroundColor Green
-    Write-Host "└─ Auth Key: " -NoNewline
+    Write-Host "\- Auth Key: " -NoNewline
     Write-Host "$($AUTH_KEY.Substring(0, [Math]::Min(15, $AUTH_KEY.Length)))..." -ForegroundColor Green
 }
 
@@ -299,7 +299,7 @@ Write-Host "[*] Iniciando instalação..." -ForegroundColor Yellow
 Write-Host ""
 
 # Passo 1: Baixar e instalar Tailscale
-Write-Host "▶ " -ForegroundColor Green -NoNewline
+Write-Host ">" -ForegroundColor Green -NoNewline
 $result = Show-Spinner -ScriptBlock {
     try {
         # Baixar instalador do Tailscale
@@ -326,7 +326,7 @@ $result = Show-Spinner -ScriptBlock {
 } -Message "Passo 1: Instalando Tailscale"
 
 # Passo 2: Configurar roteamento IP (IP Forwarding no Windows)
-Write-Host "▶ " -ForegroundColor Green -NoNewline
+Write-Host ">" -ForegroundColor Green -NoNewline
 $result = Show-Spinner -ScriptBlock {
     try {
         # Habilitar IP forwarding
@@ -342,7 +342,7 @@ $result = Show-Spinner -ScriptBlock {
 } -Message "Passo 2: Habilitando roteamento IP"
 
 # Passo 3: Conectar ao Tailscale
-Write-Host "▶ " -ForegroundColor Green -NoNewline
+Write-Host ">" -ForegroundColor Green -NoNewline
 $HOSTNAME = "${CLIENTE_TAG}-${DB_TAG}-gateway"
 
 $result = Show-Spinner -ScriptBlock {
@@ -379,7 +379,7 @@ $result = Show-Spinner -ScriptBlock {
 } -Message "Passo 3: Conectando ao Tailscale" -ArgumentList $AUTH_KEY, $DB_IP, $HOSTNAME, $CLIENTE_TAG
 
 # Passo 4: Verificar instalação
-Write-Host "▶ " -ForegroundColor Green -NoNewline
+Write-Host ">" -ForegroundColor Green -NoNewline
 Write-Host "Passo 4: Verificando instalação..." -ForegroundColor Green
 
 Start-Sleep -Seconds 2
@@ -402,17 +402,17 @@ if (Test-Path $tailscale) {
         Write-Host "================================================" -ForegroundColor Green
         Write-Host ""
         Write-Host "[>] Resumo da Configuração:" -ForegroundColor Yellow
-        Write-Host "├─ Cliente: " -NoNewline
+        Write-Host "|- Cliente: " -NoNewline
         Write-Host $CLIENTE_NOME -ForegroundColor Green
-        Write-Host "├─ IP Tailscale Gateway: " -NoNewline
+        Write-Host "|- IP Tailscale Gateway: " -NoNewline
         Write-Host $tailscaleIP -ForegroundColor Green
-        Write-Host "├─ Hostname: " -NoNewline
+        Write-Host "|- Hostname: " -NoNewline
         Write-Host $HOSTNAME -ForegroundColor Green
-        Write-Host "├─ Rota anunciada: " -NoNewline
+        Write-Host "|- Rota anunciada: " -NoNewline
         Write-Host "$DB_IP/32" -ForegroundColor Green
-        Write-Host "├─ Porta do DB: " -NoNewline
+        Write-Host "|- Porta do DB: " -NoNewline
         Write-Host $DB_PORTA -ForegroundColor Green
-        Write-Host "└─ Tipo do DB: " -NoNewline
+        Write-Host "\- Tipo do DB: " -NoNewline
         Write-Host $DB_TIPO -ForegroundColor Green
         Write-Host ""
         Write-Host "[>] Recursos de Segurança:" -ForegroundColor Yellow
@@ -423,13 +423,13 @@ if (Test-Path $tailscale) {
         Write-Host ""
         Write-Host "[>] Envie para $PRESTADOR_NOME" -ForegroundColor Yellow -NoNewline
         Write-Host ":"
-        Write-Host "├─ IP do Banco: " -NoNewline
+        Write-Host "|- IP do Banco: " -NoNewline
         Write-Host $DB_IP -ForegroundColor Green
-        Write-Host "├─ Porta: " -NoNewline
+        Write-Host "|- Porta: " -NoNewline
         Write-Host $DB_PORTA -ForegroundColor Green
-        Write-Host "├─ Tipo: " -NoNewline
+        Write-Host "|- Tipo: " -NoNewline
         Write-Host $DB_TIPO -ForegroundColor Green
-        Write-Host "└─ Status: " -NoNewline
+        Write-Host "\- Status: " -NoNewline
         Write-Host "Pronto para conexão" -ForegroundColor Green
         
         # Criar arquivo de configuração
@@ -476,15 +476,15 @@ Write-Host "================================================" -ForegroundColor G
 
 Write-Host ""
 Write-Host "[>] Comandos úteis:" -ForegroundColor Yellow
-Write-Host "├─ Ver status: " -NoNewline
+Write-Host "|- Ver status: " -NoNewline
 Write-Host "`"$tailscale`" status" -ForegroundColor Green
-Write-Host "├─ Ver IP: " -NoNewline
+Write-Host "|- Ver IP: " -NoNewline
 Write-Host "`"$tailscale`" ip" -ForegroundColor Green
-Write-Host "└─ Ver config: " -NoNewline
+Write-Host "\- Ver config: " -NoNewline
 Write-Host "Get-Content `"$configFile`"" -ForegroundColor Green
 
 Write-Host ""
-Write-Host "📌 NOTA IMPORTANTE:" -ForegroundColor Yellow
+Write-Host "[!] NOTA IMPORTANTE:" -ForegroundColor Yellow
 Write-Host "A segurança e controle de acesso devem ser configurados"
 Write-Host "através das ACLs (Access Control Lists) no painel do Tailscale."
 Write-Host "Consulte a documentação da Nexfar para configurações recomendadas."
