@@ -320,7 +320,7 @@ $result = Show-Spinner -ScriptBlock {
 
     # Baixar instalador
     try {
-        Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.exe" -OutFile $installerPath -UseBasicParsing
+        Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile $installerPath -UseBasicParsing
     } catch {
         throw "Erro ao baixar: $($_.Exception.Message)"
     }
