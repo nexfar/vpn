@@ -310,7 +310,7 @@ Write-Host ""
 # Passo 1: Baixar e instalar Tailscale
 Write-Host ">" -ForegroundColor Green -NoNewline
 $result = Show-Spinner -ScriptBlock {
-    $installerPath = "$env:TEMP\tailscale-setup.exe"
+    $installerPath = "$env:TEMP\tailscale-setup.msi"
     $tailscalePath = "$env:ProgramFiles\Tailscale\tailscale.exe"
 
     # Verificar se Tailscale já está instalado
@@ -318,9 +318,9 @@ $result = Show-Spinner -ScriptBlock {
         return "ja-instalado"
     }
 
-    # Baixar instalador
+    # Baixar instalador MSI (permite instalacao silenciosa sem GUI)
     try {
-        Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile $installerPath -UseBasicParsing
+        Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi" -OutFile $installerPath -UseBasicParsing
     } catch {
         throw "Erro ao baixar: $($_.Exception.Message)"
     }
@@ -329,11 +329,12 @@ $result = Show-Spinner -ScriptBlock {
         throw "Instalador nao foi baixado para: $installerPath"
     }
 
-    # Instalar silenciosamente
+    # Instalar silenciosamente com MSI (TS_NOLAUNCH=1 impede que a GUI abra)
     try {
-        $process = Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait -PassThru -NoNewWindow
+        $msiArgs = "/i `"$installerPath`" /quiet /norestart TS_NOLAUNCH=1"
+        $process = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru -NoNewWindow
         if ($process.ExitCode -ne 0) {
-            throw "Instalador retornou codigo: $($process.ExitCode)"
+            throw "msiexec retornou codigo: $($process.ExitCode)"
         }
     } catch {
         throw "Erro na instalacao: $($_.Exception.Message)"
